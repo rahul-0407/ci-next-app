@@ -17,7 +17,7 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2.pem
           chmod 600 ~/.ssh/ec2.pem
 
-      - name: Add EC2 to known_hosts
+      - name: Add EC2 host to known_hosts
         run: |
           ssh-keyscan -H 52.90.250.6 >> ~/.ssh/known_hosts
 
@@ -26,12 +26,28 @@ jobs:
           ssh -i ~/.ssh/ec2.pem ubuntu@52.90.250.6 << 'EOF'
             set -e
 
+            # 👇 Load nvm so node + pnpm are in PATH (CRITICAL FIX)
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+            echo "Node version:"
+            node --version
+
+            echo "PNPM version:"
+            pnpm --version
+
             cd ~/ci-next-app
 
+            echo "Pulling latest code..."
             git pull origin main
 
+            echo "Installing dependencies..."
             pnpm install
+
+            echo "Building all apps..."
             pnpm run build
+
+            echo "Restarting PM2 processes..."
 
             pm2 delete fe-server || true
             pm2 delete http-server || true
@@ -41,5 +57,8 @@ jobs:
             pm2 start apps/http-server/dist/index.js --name http-server
             pm2 start apps/ws-server/dist/index.js --name ws-server
 
+            # 👇 Persist PM2 state (recommended)
             pm2 save
+
+            echo "✅ Deploy finished successfully"
           EOF
