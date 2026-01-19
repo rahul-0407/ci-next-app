@@ -55,5 +55,5 @@ jobs:
 
             pm2 save
 
-            echo  Deploy finished successfully"
+            echo  "Deploy finished successfully"
           EOF
