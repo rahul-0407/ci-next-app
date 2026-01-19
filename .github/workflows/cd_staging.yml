@@ -49,16 +49,11 @@ jobs:
 
             echo "Restarting PM2 processes..."
 
-            pm2 delete fe-server || true
-            pm2 delete http-server || true
-            pm2 delete ws-server || true
+            pm2 restart fe-server
+            pm2 restart http-server
+            pm2 restart ws-server
 
-            pm2 start apps/web/dist/index.js --name fe-server
-            pm2 start apps/http-server/dist/index.js --name http-server
-            pm2 start apps/ws-server/dist/index.js --name ws-server
-
-            # 👇 Persist PM2 state (recommended)
             pm2 save
 
-            echo "✅ Deploy finished successfully"
+            echo  Deploy finished successfully"
           EOF
