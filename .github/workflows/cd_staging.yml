@@ -1,6 +1,7 @@
 name: Deploy to staging
+
 on:
-  push: 
+  push:
     branches:
       - "main"
 
@@ -8,13 +9,37 @@ jobs:
   redeploy_everything:
     runs-on: ubuntu-latest
     name: Deploying everything to the staging cluster
+
     steps:
-      - run: |
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" &> ~/ssh_key
-          ssh -i ~/ssh_key ubuntu@52.90.250.6
-          cd ci-next-app/ && git pull
-          pnpm install
-          pnpm run build
-          pm2 start fe-server
-          pm2 start http-server
-          pm2 start ws-server
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+
+      - name: Add EC2 to known_hosts
+        run: |
+          ssh-keyscan -H 52.90.250.6 >> ~/.ssh/known_hosts
+
+      - name: Deploy on EC2
+        run: |
+          ssh -i ~/.ssh/ec2.pem ubuntu@52.90.250.6 << 'EOF'
+            set -e
+
+            cd ~/ci-next-app
+
+            git pull origin main
+
+            pnpm install
+            pnpm run build
+
+            pm2 delete fe-server || true
+            pm2 delete http-server || true
+            pm2 delete ws-server || true
+
+            pm2 start apps/web/dist/index.js --name fe-server
+            pm2 start apps/http-server/dist/index.js --name http-server
+            pm2 start apps/ws-server/dist/index.js --name ws-server
+
+            pm2 save
+          EOF
