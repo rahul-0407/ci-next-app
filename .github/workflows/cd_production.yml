@@ -1,0 +1,59 @@
+name: Deploy to staging
+
+on:
+  push:
+    branches:
+      - "production"
+
+jobs:
+  redeploy_everything:
+    runs-on: ubuntu-latest
+    name: Deploying everything to the production cluster
+
+    steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+
+      - name: Add EC2 host to known_hosts
+        run: |
+          ssh-keyscan -H 3.91.82.8 >> ~/.ssh/known_hosts
+
+      - name: Deploy on EC2
+        run: |
+          ssh -i ~/.ssh/ec2.pem ubuntu@3.91.82.8 << 'EOF'
+            set -e
+
+            # 👇 Load nvm so node + pnpm are in PATH (CRITICAL FIX)
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+            echo "Node version:"
+            node --version
+
+            echo "PNPM version:"
+            pnpm --version
+
+            cd ~/ci-next-app
+
+            echo "Pulling latest code..."
+            git pull origin production
+
+            echo "Installing dependencies..."
+            pnpm install
+
+            echo "Building all apps..."
+            pnpm run build
+
+            echo "Restarting PM2 processes..."
+
+            pm2 restart fe-server
+            pm2 restart http-server
+            pm2 restart ws-server
+
+            pm2 save
+
+            echo  "Deploy finished successfully"
+          EOF
